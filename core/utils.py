@@ -4,7 +4,7 @@ import pickle
 import numpy as np
 import torch
 
-def get_logits(inputs, classifier):
+def get_scaled_logits(inputs, classifier):
     assert callable(classifier)
     if hasattr(classifier, "to"):
         classifier = classifier.to(inputs.device)
@@ -14,7 +14,8 @@ def normalize_weight(weight, rotation_matrix, fnorm):
     """Normalize the finetuned weight."""
     weight = weight.view(-1)
     assert rotation_matrix.shape[1] == weight.shape[0], "Rotation matrix and weight shape mismatch"
-    weight = torch.matmul(weight, rotation_matrix)
+    if rotation_matrix is not None:
+        weight = torch.matmul(weight, rotation_matrix)
     weight = weight / fnorm
     return weight
 
