@@ -1,7 +1,7 @@
 import os
 import torch
 import torchvision.datasets as datasets
-
+from torchvision.datasets import DTD as TorchvisionDTD
 
 class DTD:
     def __init__(self,
@@ -10,11 +10,8 @@ class DTD:
                  batch_size=32,
                  num_workers=16):
         # Data loading code
-        traindir = os.path.join(location, 'dtd', 'train')
-        valdir = os.path.join(location, 'dtd', 'val')
-
-        self.train_dataset = datasets.ImageFolder(
-            traindir, transform=preprocess)
+        self.train_dataset = TorchvisionDTD(
+            root=location, split='train', transform=preprocess, download=True)
         self.train_loader = torch.utils.data.DataLoader(
             self.train_dataset,
             shuffle=True,
@@ -22,7 +19,8 @@ class DTD:
             num_workers=num_workers,
         )
 
-        self.test_dataset = datasets.ImageFolder(valdir, transform=preprocess)
+        self.test_dataset = TorchvisionDTD(
+            root=location, split='val', transform=preprocess, download=True)
         self.test_loader = torch.utils.data.DataLoader(
             self.test_dataset,
             batch_size=batch_size,
