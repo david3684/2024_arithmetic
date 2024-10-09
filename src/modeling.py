@@ -23,6 +23,15 @@ class ImageEncoder(torch.nn.Module):
         if not keep_lang and hasattr(self.model, 'transformer'):
             delattr(self.model, 'transformer')
 
+        if args.scale_model:
+            self.apply_scaling_and_permutation(args.scaling_factor, args.permute_matrix)
+        
+    def apply_scaling(self, scaling_coef, permute_matrix):
+        for name, param in self.model.named_parameters():
+            if 'weight' in name:
+                param.data = torch.matmul(param.data, permute_matrix.Transpose(0, 1))
+                param.data *= scaling_coef
+                
     def forward(self, images):
         assert self.model is not None
         return self.model.encode_image(images)

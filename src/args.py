@@ -98,6 +98,12 @@ def parse_arguments():
         default='~/.cache/open_clip',
         help='Directory for caching models from OpenCLIP'
     )
+    parser.add_argument(
+        "--scale_model",
+        type=bool,
+        default=False,
+        help="Whether to scale the model."
+    )
     parsed_args = parser.parse_args()
     parsed_args.device = "cuda" if torch.cuda.is_available() else "cpu"
     
