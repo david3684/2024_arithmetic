@@ -1,10 +1,12 @@
 import torch
 
-def make_task_vector_for_weight(args, finetuned_weight, pretrained_weight, low_rank=None):
+def make_task_vector_for_weight(args, finetuned_single_weight, pretrained_single_weight):
     """Create a task vector for a single weight tensor."""
-    if low_rank == 'SoRA':
-        diff = finetuned_weight - pretrained_weight
-    
+    if args.low_rank_mode == 'SoRA':
+        print(finetuned_single_weight, pretrained_single_weight)
+        diff = finetuned_single_weight - pretrained_single_weight
+        
+        print(f"Shape of diff: {diff.shape}")
         U, s, V = torch.linalg.svd(diff.to(args.device), full_matrices=False)    
         U, s, V = U.to("cpu"), s.to("cpu"), V.to("cpu")
         dim = s.shape[0]
@@ -12,25 +14,28 @@ def make_task_vector_for_weight(args, finetuned_weight, pretrained_weight, low_r
         sqrted_s = torch.sqrt(s[:parsed_dim])
         parsed_U = U[:, :parsed_dim] @ torch.diag(sqrted_s)
         parsed_V = torch.diag(sqrted_s) @ V[:parsed_dim, :]
-        return parsed_U@parsed_V
-        # return parsed_U.to("cpu"), parsed_V.to("cpu")
-    return finetuned_weight - pretrained_weight
+        return parsed_U @ parsed_V
 
-def make_task_vector(args, finetuned_tensor, pretrained_tensor, low_rank=None):
+    return finetuned_single_weight - pretrained_single_weight
+
+def make_task_vector(args, finetuned_state_dict, pretrained_state_dict):
     """Create a task vector from a finetuned and a pretrained tensor."""
     task_vector = {}
-    for key in finetuned_tensor:
-        if 'bias' in key:
-            task_vector[key] = finetuned_tensor[key] - pretrained_tensor[key] 
+    for key in finetuned_state_dict:
+        print(f"Making task vector for {key}")
+        if 'attn' or 'mlp' in key:
+            task_vector[key] = make_task_vector_for_weight(args, finetuned_state_dict[key], pretrained_state_dict[key])
+        elif pretrained_state_dict[key].dtype in [torch.int64, torch.uint8]: 
+            continue # from original setting
         elif 'ln' in key:
-            task_vector[key] = finetuned_tensor[key] # preserve the layer norm of finetuned weight
+            task_vector[key] = finetuned_state_dict[key] # preserve the layer norm of finetuned weight
         else:
-            task_vector[key] = make_task_vector_for_weight(args, finetuned_tensor[key], pretrained_tensor[key], low_rank)
+            task_vector[key] = finetuned_state_dict[key] - pretrained_state_dict[key]  # 이거 pretrained weight 모를 경우에 수정 해줘야 함.
             
     return task_vector
 
 class TaskVector():
-    def __init__(self, args, pretrained_checkpoint=None, finetuned_checkpoint=None, vector=None,  low_rank=None):
+    def __init__(self, args, pretrained_checkpoint=None, finetuned_checkpoint=None, vector=None):
         """Initializes the task vector from a pretrained and a finetuned checkpoints.
         
         This can either be done by passing two state dicts (one corresponding to the
@@ -42,13 +47,10 @@ class TaskVector():
         else:
             assert pretrained_checkpoint is not None and finetuned_checkpoint is not None
             with torch.no_grad():
-                pretrained_state_dict = torch.load(pretrained_checkpoint).state_dict()
-                finetuned_state_dict = torch.load(finetuned_checkpoint).state_dict()
-                self.vector = {}
-                for key in pretrained_state_dict:
-                    if pretrained_state_dict[key].dtype in [torch.int64, torch.uint8]:
-                        continue
-                    self.vector[key] = make_task_vector(args, finetuned_state_dict[key], pretrained_state_dict[key], low_rank)
+                # pretrained_state_dict = torch.load(pretrained_checkpoint).state_dict()
+                pretrained_state_dict = pretrained_checkpoint
+                finetuned_state_dict = finetuned_checkpoint
+                self.vector = make_task_vector(args, finetuned_state_dict, pretrained_state_dict)
 
     
     def __add__(self, other):

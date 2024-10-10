@@ -27,6 +27,9 @@ def main(args):
     # Config
     shared_weight = torch.load(args.shared_weight)
     org_openclip_weight = torch.load(f'checkpoints/{args.model}/zeroshot.pt').state_dict()
+    task1_weight = torch.load('/data2/david3684/2024_arithmetic/checkpoints/ViT-L-14/DTD/finetuned.pt').state_dict()
+    task2_weight = torch.load('/data2/david3684/2024_arithmetic/checkpoints/ViT-L-14/SUN397/finetuned.pt').state_dict()
+    
     # shared_weight_state_dict = shared_weight['model']
     
     qkv_store = {}
@@ -59,13 +62,22 @@ def main(args):
             org_openclip_weight[new_key] = in_proj_weight
 
     for scale_dict_key, value in shared_weight['scale_dict'].items():
-        if 'diff' in scale_dict_key:
-            continue
         transformed_scale_dict_key = transform_key(scale_dict_key)
-        org_openclip_weight[transformed_scale_dict_key + '.scale'] = value
+        print(f'transformed_scale_dict_key: {transformed_scale_dict_key}')
+        if 'clip_vit_1' in scale_dict_key:
+            task1_weight[transformed_scale_dict_key + '.scale'] = value
+        elif 'clip_vit_2' in scale_dict_key:
+            task2_weight[transformed_scale_dict_key + '.scale'] = value
+        elif 'shared' in scale_dict_key:
+            transformed_scale_dict_key = transform_key(scale_dict_key)
+            org_openclip_weight[transformed_scale_dict_key + '.scale'] = value    
+        
 
-    for key in org_openclip_weight.keys():
+    for key in task1_weight:
         print(key)
+
+    low_rank_vector_task1= TaskVector(args, org_openclip_weight, task1_weight, vector = None)
+    low_rank_vector_task2= TaskVector(args, org_openclip_weight, task1_weight, vector = None)
 
     # torch.save(org_openclip_weight, f"{args.save}/{args.save_file_name}")
     
@@ -77,6 +89,8 @@ if __name__ == "__main__":
     args.model = model
     args.save = f'checkpoints/{model}'
     args.save_file_name = '_'.join(datasets) + '_shared_openclip.pt'
+    args.low_rank_mode = 'SoRA'
+    args.initial_rank_ratio = 0.5
     pretrained_checkpoint = f'checkpoints/{model}/zeroshot.pt'
     args.shared_weight = '/data2/david3684/2024_arithmetic/shared_weight/20241007_vanilla/rankmin_config_20241009_uni_vanilla_2.bin'
     main(args)
