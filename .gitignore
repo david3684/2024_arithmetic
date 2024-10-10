@@ -6,6 +6,10 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+# Model Checkpoints
+*.bin
+*.pth
+
 # C extensions
 *.so
 
