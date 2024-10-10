@@ -33,8 +33,31 @@ class ImageEncoder(torch.nn.Module):
                 param.data *= scaling_coef
                 
     def forward(self, images):
+        print('Forward pass with scaling factors')
         assert self.model is not None
-        return self.model.encode_image(images)
+        
+        # Apply scaling factors to weights
+        with torch.no_grad():
+            for name, param in self.model.named_parameters():
+                if 'weight' in name:
+                    scale_name = name + '.scale'
+                    if scale_name in self.model.state_dict():
+                        scaling_factor = self.model.state_dict()[scale_name]
+                        param.data /= scaling_factor
+        
+        # Encode images
+        encoded_images = self.model.encode_image(images)
+        
+        # Revert weights to original values
+        with torch.no_grad():
+            for name, param in self.model.named_parameters():
+                if 'weight' in name:
+                    scale_name = name + '.scale'
+                    if scale_name in self.model.state_dict():
+                        scaling_factor = self.model.state_dict()[scale_name]
+                        param.data *= scaling_factor
+        
+        return encoded_images
     
     def __call__(self, inputs):
         return self.forward(inputs)

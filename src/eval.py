@@ -16,7 +16,7 @@ from src.datasets.registry import get_dataset
 def eval_single_dataset(image_encoder, dataset_name, args):
     classification_head = get_classification_head(args, dataset_name)
     model = ImageClassifier(image_encoder, classification_head)
-
+    # 이 근방에서 scaling 처리 해줘야함.
     model.eval()
 
     dataset = get_dataset(

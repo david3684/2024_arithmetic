@@ -32,15 +32,17 @@ def main(args):
     pretrained_checkpoint = f'checkpoints/{args.model}/zeroshot.pt'
     
     formatted_shared_weight_path = f"/data2/david3684/2024_arithmetic/checkpoints/ViT-L-14/DTD_SUN_shared_weight_openclip.pt"
+    finetuned_state_dict = {}
+    for task in args.tasks:
+        finetuned_state_dict[f'{task}'] = torch.load(f'/data2/david3684/2024_arithmetic/checkpoints/ViT-L-14/{task}/finetuned.pt').state_dict()
+            
     if os.path.exists(formatted_shared_weight_path):
         shared_weight_formatted = torch.load(formatted_shared_weight_path)
         shared_state_dict_formatted = shared_weight_formatted.state_dict()
     else:
         shared_weight_formatted = torch.load(pretrained_checkpoint)
         shared_state_dict_formatted = {}
-        finetuned_state_dict = {}
-        for task in args.tasks:
-            finetuned_state_dict[f'{task}'] = torch.load(f'/data2/david3684/2024_arithmetic/checkpoints/ViT-L-14/{task}/finetuned.pt').state_dict()
+        
         qkv_store = {}
         
         for old_key, value in shared_weight.items():
@@ -70,6 +72,7 @@ def main(args):
                 print(new_key)
                 shared_state_dict_formatted[new_key] = in_proj_weight
         for scale_dict_key, value in shared_weight['scale_dict'].items():
+            print(scale_dict_key)
             transformed_scale_dict_key = transform_key(scale_dict_key)
             if 'clip_vit_1' in scale_dict_key:
                 finetuned_state_dict['DTD'][transformed_scale_dict_key + '.scale'] = value
@@ -95,7 +98,6 @@ def main(args):
             low_rank_vectors[f'{task}'] = torch.load(task_vector_path)
         else:
             print(f"Building task vectors for task {task}")
-            finetuned_state_dict[f'{task}'] = torch.load(f'/data2/david3684/2024_arithmetic/checkpoints/ViT-L-14/{task}/finetuned.pt').state_dict()
             low_rank_vectors[f'{task}'] = TaskVector(args, shared_state_dict_formatted, finetuned_state_dict[f'{task}'], vector=None)
             torch.save(low_rank_vectors[f'{task}'], task_vector_path)
 
@@ -120,7 +122,7 @@ if __name__ == "__main__":
     args.tasks = datasets
     args.initial_rank_ratio = 0.5
     pretrained_checkpoint = f'checkpoints/{model}/zeroshot.pt'
-    args.shared_weight = '/data2/david3684/2024_arithmetic/shared_weight/20241007_vanilla/rankmin_config_20241009_uni_vanilla_2.bin'
+    args.shared_weight = '/data2/david3684/2024_arithmetic/shared_weight/20241010_vanilla/rankmin_config_20241010_uni_vanilla_2.bin'
     main(args)
     
 
