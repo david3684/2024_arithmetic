@@ -4,11 +4,11 @@ from src.utils import cosine_lr, LabelSmoothing
 import open_clip.model
 
 # 체크포인트 파일 경로
-checkpoint_path = f'/data2/david3684/2024_arithmetic/checkpoints/ViT-L-14/DTD/finetuned.pt'
+checkpoint_path = f'/data2/david3684/2024_arithmetic/shared_weight/20241007_vanilla/rankmin_config_20241009_uni_vanilla_2.bin'
 
 # 체크포인트 파일 로드
 with torch.no_grad():
-    encoder_state_dict = torch.load(checkpoint_path).state_dict()
+    encoder_state_dict = torch.load(checkpoint_path)
 
 # checkpoint = torch.load(checkpoint_path, map_location='cpu')
 
