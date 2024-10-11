@@ -173,15 +173,17 @@ def main(args):
     # eval_single_dataset(finetuned_model_each_task['DTD'], 'DTD', args)
     
     low_rank_vectors = {}
-    for task in args.tasks:
-        finetuned_model_each_task[f'{task}'].to(args.device)        
-        task_vector_path = f"/data2/david3684/2024_arithmetic/checkpoints/ViT-L-14/{task}/vector_from_shared_{args.low_rank_mode}_rank{args.initial_rank_ratio}.pt"
-        if os.path.exists(task_vector_path):
-            low_rank_vectors[f'{task}'] = torch.load(task_vector_path)
-        else:
-            print(f"Building task vectors for task {task}")
-            low_rank_vectors[f'{task}'] = TaskVector(args, zero_shot_encoder.state_dict(), finetuned_model_each_task[f'{task}'].state_dict(), task=task, vector=None)
-            torch.save(low_rank_vectors[f'{task}'], task_vector_path)
+    for initial_rank_ratio in [0, 0.001, 0.005, 0.01, 0.02, 0.05, 0.16, 0.32]:
+        for task in args.tasks:
+            finetuned_model_each_task[f'{task}'].to(args.device) 
+            args.initial_rank_ratio = initial_rank_ratio       
+            task_vector_path = f"/data2/david3684/2024_arithmetic/checkpoints/ViT-L-14/{task}/vector_from_shared_{args.low_rank_mode}_rank{args.initial_rank_ratio}.pt"
+            if os.path.exists(task_vector_path):
+                low_rank_vectors[f'{task}'] = torch.load(task_vector_path)
+            else:
+                print(f"Building task vectors for task {task}")
+                low_rank_vectors[f'{task}'] = TaskVector(args, zero_shot_encoder.state_dict(), finetuned_model_each_task[f'{task}'].state_dict(), task=task, vector=None)
+                torch.save(low_rank_vectors[f'{task}'], task_vector_path)
     
     low_rank_vectors['DTD'].to(args.device)
     low_rank_vectors['SUN397'].to(args.device)
