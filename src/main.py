@@ -27,9 +27,11 @@ def calculate_weight_difference(original_state_dict, formatted_state_dict):
     
     for key in original_state_dict.keys():
         if key in formatted_state_dict:
+            import ipdb; ipdb.set_trace()
             original_weight = original_state_dict[key]
             formatted_weight = formatted_state_dict[key]
-            difference = torch.abs(original_weight - formatted_weight).sum().item()
+            # difference = torch.abs(original_weight - formatted_weight).sum().item()
+            difference = torch.mean((original_weight - formatted_weight)**2).item()
             differences[key] = difference
         else:
             print(f"Key {key} not found in formatted model state dict.")
@@ -95,9 +97,9 @@ def main(args):
     zero_shot_checkpoint = f'checkpoints/{args.model}/zeroshot.pt'
     
     formatted_shared_weight_path = f"/data2/david3684/2024_arithmetic/checkpoints/ViT-L-14/DTD_SUN_shared_weight_openclip.pt"
-    finetuned_state_dict = {}
+    finetuned_model_each_task = {}
     for task in args.tasks:
-        finetuned_state_dict[f'{task}'] = torch.load(f'/data2/david3684/2024_arithmetic/checkpoints/ViT-L-14/{task}/finetuned.pt').state_dict()
+        finetuned_model_each_task[f'{task}'] = torch.load(f'/data2/david3684/2024_arithmetic/checkpoints/ViT-L-14/{task}/finetuned.pt')
          
     zero_shot_encoder_org = torch.load(zero_shot_checkpoint)
     # eval_single_dataset(zero_shot_encoder, 'DTD', args) 
@@ -137,7 +139,8 @@ def main(args):
                     qkv_store[layer_idx][weight_type[0]] = value
             else: # out_proj.weight, c_fc.weight, c_proj.weight
                 assert new_key in shared_weight_state_dict_formatted
-                shared_weight_state_dict_formatted[new_key] = value 
+                weight_scale_factor = shared_weight_state_dict['scale_dict'][old_key]
+                shared_weight_state_dict_formatted[new_key] = value / weight_scale_factor
 
         for layer_idx, qkv in qkv_store.items():
             if all(v.bool().all().item() for v in qkv.values()):
@@ -151,41 +154,46 @@ def main(args):
 
         zero_shot_encoder.load_state_dict(shared_weight_state_dict_formatted)
         
-        # torch.save(zero_shot_encoder, f"/data2/david3684/2024_arithmetic/checkpoints/ViT-L-14/DTD_SUN_shared_weight_openclip.pt")
+        torch.save(zero_shot_encoder, f"/data2/david3684/2024_arithmetic/checkpoints/ViT-L-14/DTD_SUN_shared_weight_openclip.pt")
 
-
-    zero_shot_encoder_org = zero_shot_encoder_org.to(args.device)
-    zero_shot_encoder = zero_shot_encoder.to(args.device)
-    eval_single_dataset(zero_shot_encoder_org, 'DTD', args)
-    eval_single_dataset(zero_shot_encoder, 'DTD', args)
-    
     # weight_differences = calculate_weight_difference(zero_shot_encoder_org.state_dict(), shared_weight_state_dict_formatted)
-    
     # for key, diff in weight_differences.items():
     #     print(f"Difference in {key}: {diff}")
-        
+
+    # zero_shot_encoder_org = zero_shot_encoder_org.to(args.device)
+    zero_shot_encoder = zero_shot_encoder.to(args.device)
+    
     scale_factors_1, scale_factors_2 = save_scale_factors(shared_weight_state_dict['scale_dict'])
     args.task_scale_factors = {'DTD': scale_factors_1, 'SUN397': scale_factors_2}
+    # eval_single_dataset(zero_shot_encoder_org, 'DTD', args)
+    # eval_single_dataset(zero_shot_encoder, 'DTD', args)
+    
+    
+        
     
     low_rank_vectors = {}
     for task in args.tasks:
+        finetuned_model_each_task[f'{task}'].to(args.device)        
         task_vector_path = f"/data2/david3684/2024_arithmetic/checkpoints/ViT-L-14/{task}/vector_from_shared.pt"
         if os.path.exists(task_vector_path):
             low_rank_vectors[f'{task}'] = torch.load(task_vector_path)
+            
         else:
             print(f"Building task vectors for task {task}")
-            low_rank_vectors[f'{task}'] = TaskVector(args, zero_shot_encoder.state_dict(), finetuned_state_dict[f'{task}'], task=task, vector=None)
+            low_rank_vectors[f'{task}'] = TaskVector(args, zero_shot_encoder.state_dict(), finetuned_model_each_task[f'{task}'].state_dict(), task=task, vector=None)
             torch.save(low_rank_vectors[f'{task}'], task_vector_path)
             
-    # low rank task vectors have scaling factor depending on the task
-    ## single task도 안나옴. debugging issue?
-    single_task_image_encoder = low_rank_vectors['DTD'].apply_to(zero_shot_encoder, scaling_coef=0.8)
+    
+    
+    low_rank_vectors['DTD'].to(args.device)
+    zero_shot_encoder.to(args.device)
+    single_task_image_encoder = low_rank_vectors['DTD'].apply_to(zero_shot_encoder, scaling_coef=0.8).to(args.device)
     eval_single_dataset(single_task_image_encoder, 'DTD', args)
     
-    task_vector_sum = sum(low_rank_vectors.values())
+    task_vector_sum = sum(low_rank_vectors.values()).to(args.device)
 
-    # 잘 구했다 치고 evaluate로    
-    multitask_image_encoder = task_vector_sum.apply_to(zero_shot_encoder, scaling_coef=0.8)
+
+    multitask_image_encoder = task_vector_sum.apply_to(zero_shot_encoder, scaling_coef=1)
 
     
     for task in args.tasks:
@@ -204,7 +212,7 @@ if __name__ == "__main__":
     args.low_rank_mode = 'SoRA'
     args.tasks = datasets
     args.initial_rank_ratio = 0.5
-    args.scale_shared_weight = False
+    args.scale_shared_weight = True
     args.task_scale_factors = None
     zero_shot_checkpoint = f'checkpoints/{model}/zeroshot.pt'
     args.shared_weight = '/data2/david3684/2024_arithmetic/shared_weight/20241010_vanilla/rankmin_config_20241010_uni_vanilla_2.bin'

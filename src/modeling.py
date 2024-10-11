@@ -44,6 +44,7 @@ class ImageEncoder(torch.nn.Module):
                     if 'weight' in name:
                         scale_name = 'model.'+name + '.scale' # load task specific scaling factor
                         if scale_name in args.task_scale_factors[task].keys():
+                            # import ipdb; ipdb.set_trace()
                             scaling_factor = args.task_scale_factors[task][scale_name]
                             if 'attn.in_proj' in name:
                                 q, k, v = param.data.chunk(3, dim=0)

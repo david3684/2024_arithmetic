@@ -4,7 +4,7 @@ def make_task_vector_for_weight(args, finetuned_single_weight, pretrained_single
     """Create a task vector for a single weight tensor."""
     if args.low_rank_mode == 'SoRA':
         #print(finetuned_single_weight, pretrained_single_weight)
-        diff = finetuned_single_weight - pretrained_single_weight
+        diff = finetuned_single_weight/torch.norm(finetuned_single_weight, p='fro')  - pretrained_single_weight
         
         #print(f"Shape of diff: {diff.shape}")
         U, s, V_T = torch.linalg.svd(diff.to(args.device), full_matrices=False)    
@@ -16,7 +16,7 @@ def make_task_vector_for_weight(args, finetuned_single_weight, pretrained_single
         parsed_U = U[:, :parsed_dim] @ torch.diag(sqrted_s)
         return parsed_U @ parsed_V_T
 
-    return finetuned_single_weight - pretrained_single_weight
+    return finetuned_single_weight/torch.norm(finetuned_single_weight, p='fro')  - pretrained_single_weight
 
         
 def make_task_vector(args, finetuned_state_dict, pretrained_state_dict, task):
@@ -37,7 +37,7 @@ def make_task_vector(args, finetuned_state_dict, pretrained_state_dict, task):
             continue # from original setting
         else:
             task_vector[key] = finetuned_state_dict[key] - pretrained_state_dict[key]  # positional embedding, class token, etc.
-            
+        
     return task_vector
 
 class TaskVector():
@@ -59,6 +59,10 @@ class TaskVector():
                 finetuned_state_dict = finetuned_checkpoint
                 self.vector = make_task_vector(args, finetuned_state_dict, pretrained_state_dict, task)
 
+    def to(self, device):
+        for key in self.vector:
+            self.vector[key] = self.vector[key].to(device)
+        return self
     
     def __add__(self, other):
         """Add two task vectors together."""
