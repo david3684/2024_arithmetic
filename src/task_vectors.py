@@ -1,10 +1,18 @@
 import torch
 
-def make_task_vector_for_weight(args, finetuned_single_weight, pretrained_single_weight):
+def make_task_vector_for_weight(args, finetuned_single_weight, pretrained_single_weight, key):
     """Create a task vector for a single weight tensor."""
     if args.low_rank_mode == 'SoRA':
-        #print(finetuned_single_weight, pretrained_single_weight)
-        diff = finetuned_single_weight/torch.norm(finetuned_single_weight, p='fro')  - pretrained_single_weight
+        if 'in_proj' in key:
+            print(f"Shape of finetuned_single_weight: {finetuned_single_weight.shape}") 
+            q_1, k_1, v_1 = finetuned_single_weight.chunk(3, dim=0)
+            q_2, k_2, v_2 = pretrained_single_weight.chunk(3, dim=0)
+            q_diff = q_1/torch.norm(q_1, p='fro') - q_2
+            k_diff = k_1/torch.norm(k_1, p='fro') - k_2
+            v_diff = v_1/torch.norm(v_1, p='fro') - v_2
+            diff = torch.cat([q_diff, k_diff, v_diff], dim=0)
+        else:
+            diff = finetuned_single_weight/torch.norm(finetuned_single_weight, p='fro')  - pretrained_single_weight
         
         #print(f"Shape of diff: {diff.shape}")
         U, s, V_T = torch.linalg.svd(diff.to(args.device), full_matrices=False)    
@@ -15,8 +23,18 @@ def make_task_vector_for_weight(args, finetuned_single_weight, pretrained_single
         parsed_V_T = torch.diag(sqrted_s) @ V_T[:parsed_dim, :]
         parsed_U = U[:, :parsed_dim] @ torch.diag(sqrted_s)
         return parsed_U @ parsed_V_T
-
-    return finetuned_single_weight/torch.norm(finetuned_single_weight, p='fro')  - pretrained_single_weight
+    else:
+        if 'in_proj' in key:
+            print(f"Shape of finetuned_single_weight: {finetuned_single_weight.shape}") 
+            q_1, k_1, v_1 = finetuned_single_weight.chunk(3, dim=0)
+            q_2, k_2, v_2 = pretrained_single_weight.chunk(3, dim=0)
+            q_diff = q_1/torch.norm(q_1, p='fro') - q_2
+            k_diff = k_1/torch.norm(k_1, p='fro') - k_2
+            v_diff = v_1/torch.norm(v_1, p='fro') - v_2
+            diff = torch.cat([q_diff, k_diff, v_diff], dim=0)
+        else:
+            diff = finetuned_single_weight/torch.norm(finetuned_single_weight, p='fro')  - pretrained_single_weight
+    return diff
 
         
 def make_task_vector(args, finetuned_state_dict, pretrained_state_dict, task):
@@ -24,20 +42,20 @@ def make_task_vector(args, finetuned_state_dict, pretrained_state_dict, task):
     task_vector = {}
     
     for key, value in finetuned_state_dict.items():
-        print(f"Making task vector for {key}")
+        # print(f"Making task vector for {key}")
         if key == 'model.logit_scale':
-            task_vector[key] = finetuned_state_dict[key]
+            task_vector[key] = finetuned_state_dict[key] - pretrained_state_dict[key]  # zero out the logit scale
         elif 'ln' in key:
-            task_vector[key] = finetuned_state_dict[key] # preserve the layer norm of finetuned weight
+            task_vector[key] = finetuned_state_dict[key] - pretrained_state_dict[key] # preserve the layer norm of finetuned weight
         elif 'bias' in key:
             task_vector[key] = finetuned_state_dict[key] - pretrained_state_dict[key]  # zero? 이거 pretrained weight 모를 경우에 수정 해줘야 함.
         elif 'attn' in key or 'mlp' in key:
-            task_vector[key] = make_task_vector_for_weight(args, finetuned_state_dict[key], pretrained_state_dict[key])
+            task_vector[key] = make_task_vector_for_weight(args, finetuned_state_dict[key], pretrained_state_dict[key], key)
         elif isinstance(value, dict):
             continue # from original setting
         else:
             task_vector[key] = finetuned_state_dict[key] - pretrained_state_dict[key]  # positional embedding, class token, etc.
-        
+        # import ipdb; ipdb.set_trace()
     return task_vector
 
 class TaskVector():
@@ -106,6 +124,7 @@ class TaskVector():
             state_dict = pretrained_model.state_dict()
             for key in state_dict:
                 if key in self.vector:
+                    # print(f"Key {key} found in both task vector and pretrained model. Adding scaled task vector.")
                     state_dict[key] = state_dict[key] + scaling_coef * self.vector[key]
                 else:
                     print(f"Key {key} not found in task vector. Copying from pretrained model.")
