@@ -36,7 +36,7 @@ def eval_single_dataset(image_encoder, dataset_name, args):
             x = data['images'].to(device)
             y = data['labels'].to(device)
 
-            logits = utils.get_logits(x, model)
+            logits = utils.get_logits(x, model, dataset_name, args)
 
             pred = logits.argmax(dim=1, keepdim=True).to(device)
 

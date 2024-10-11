@@ -7,7 +7,7 @@ from src.args import parse_arguments
 from src.datasets.common import get_dataloader, maybe_dictionarize
 from src.datasets.registry import get_dataset
 from src.eval import evaluate
-from src.modeling import ImageEncoder, ImageClassifier, MultiHeadImageClassifier
+from src.modeling import ImageEncoder, ImageClassifier
 from src.utils import cosine_lr, LabelSmoothing
 from src.heads import get_classification_head
 

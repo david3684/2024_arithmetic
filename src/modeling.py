@@ -32,35 +32,50 @@ class ImageEncoder(torch.nn.Module):
                 param.data = torch.matmul(param.data, permute_matrix.Transpose(0, 1))
                 param.data *= scaling_coef
                 
-    def forward(self, images):
-        print('Forward pass with scaling factors')
+    def forward(self, images, task=None, args=None):
         assert self.model is not None
         
         # Apply scaling factors to weights
-        with torch.no_grad():
-            for name, param in self.model.named_parameters():
-                if 'weight' in name:
-                    scale_name = name + '.scale'
-                    if scale_name in self.model.state_dict():
-                        scaling_factor = self.model.state_dict()[scale_name]
-                        param.data /= scaling_factor
+        #### Fix ####
+        if args.task_scale_factors is not None:
+            print('Forward pass with scaling factors')
+            with torch.no_grad():
+                for name, param in self.model.named_parameters():
+                    if 'weight' in name:
+                        scale_name = 'model.'+name + '.scale' # load task specific scaling factor
+                        if scale_name in args.task_scale_factors[task].keys():
+                            scaling_factor = args.task_scale_factors[task][scale_name]
+                            if 'attn.in_proj' in name:
+                                q, k, v = param.data.chunk(3, dim=0)
+                                q *= scaling_factor[0]
+                                k *= scaling_factor[1]
+                                v *= scaling_factor[2]
+                                param.data = torch.cat([q, k, v], dim=0)
+                            else:
+                                param.data *= scaling_factor                        
+            encoded_images = self.model.encode_image(images)
         
-        # Encode images
-        encoded_images = self.model.encode_image(images)
-        
-        # Revert weights to original values
-        with torch.no_grad():
-            for name, param in self.model.named_parameters():
-                if 'weight' in name:
-                    scale_name = name + '.scale'
-                    if scale_name in self.model.state_dict():
-                        scaling_factor = self.model.state_dict()[scale_name]
-                        param.data *= scaling_factor
+            with torch.no_grad():
+                for name, param in self.model.named_parameters():
+                    if 'weight' in name:
+                        scale_name = 'model.'+name + '.scale' # load task specific scaling factor
+                        if scale_name in args.task_scale_factors[task].keys():
+                            scaling_factor = args.task_scale_factors[task][scale_name]
+                            if 'attn.in_proj' in name:
+                                q, k, v = param.data.chunk(3, dim=0)
+                                q /= scaling_factor[0]
+                                k /= scaling_factor[1]
+                                v /= scaling_factor[2]
+                                param.data = torch.cat([q, k, v], dim=0)
+                            else:
+                                param.data /= scaling_factor
+        else:
+            encoded_images = self.model.encode_image(images)
         
         return encoded_images
     
-    def __call__(self, inputs):
-        return self.forward(inputs)
+    def __call__(self, inputs, dataset, args):
+        return self.forward(inputs, dataset, args)
 
     def save(self, filename):
         print(f'Saving image encoder to {filename}')
@@ -124,13 +139,13 @@ class ImageClassifier(torch.nn.Module):
         self.classification_head.weight.requires_grad_(False)
         self.classification_head.bias.requires_grad_(False)
 
-    def forward(self, inputs):
-        features = self.image_encoder(inputs)
+    def forward(self, inputs, dataset, args):
+        features = self.image_encoder(inputs, dataset, args)
         outputs = self.classification_head(features)
         return outputs
 
-    def __call__(self, inputs):
-        return self.forward(inputs)
+    def __call__(self, inputs, dataset, args):
+        return self.forward(inputs, dataset, args)
 
     def save(self, filename):
         print(f'Saving image classifier to {filename}')

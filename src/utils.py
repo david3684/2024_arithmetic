@@ -60,11 +60,11 @@ def torch_load(save_path, device=None):
 
 
 
-def get_logits(inputs, classifier):
+def get_logits(inputs, classifier, dataset, args):
     assert callable(classifier)
     if hasattr(classifier, 'to'):
         classifier = classifier.to(inputs.device)
-    return classifier(inputs)
+    return classifier(inputs, dataset, args)
 
 
 def get_probs(inputs, classifier):
