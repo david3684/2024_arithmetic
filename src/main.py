@@ -90,6 +90,47 @@ def save_scale_factors(scale_dict):
             scale_factors_2[f'model.visual.transformer.resblocks.{layer_idx}.attn.in_proj_weight' + '.scale'] = concat_scale
             
     return scale_factors_1, scale_factors_2
+
+def format_shared_weight(shared_weight_state_dict, open_clip_state_dict_template):
+    qkv_store = {}
+    for old_key, value in shared_weight_state_dict.items():
+        if 'diff' in old_key or 'scale_dict' in old_key:
+            continue
+        
+        new_key = transform_key(old_key)
+        layer_idx = new_key.split('.')[4]
+        
+        if layer_idx not in qkv_store:
+            qkv_store[layer_idx] = {'q': None, 'k': None, 'v': None}
+        
+        weight_type = new_key.split('.')[-1] 
+        if weight_type in ['q_weight', 'k_weight', 'v_weight']: # in_proj.weight (q, k, v)
+            if args.scale_shared_weight:
+                scale_key = f'shared.attn.layer.{layer_idx}.{weight_type[0]}'
+                if scale_key in shared_weight_state_dict['scale_dict']:
+                    weight_scale_factor = shared_weight_state_dict['scale_dict'][scale_key]
+                    scaled_value = value / weight_scale_factor
+                    qkv_store[layer_idx][weight_type[0]] = scaled_value
+                else:
+                    print(f"Scale key {scale_key} not found in scale_dict.")
+            else:
+                qkv_store[layer_idx][weight_type[0]] = value
+        else: # out_proj.weight, c_fc.weight, c_proj.weight
+            assert new_key in open_clip_state_dict_template
+            weight_scale_factor = shared_weight_state_dict['scale_dict'][old_key]
+            open_clip_state_dict_template[new_key] = value / weight_scale_factor
+
+    for layer_idx, qkv in qkv_store.items():
+        if all(v.bool().all().item() for v in qkv.values()):
+            in_proj_weight = torch.cat([qkv['q'], qkv['k'], qkv['v']], dim=0)
+            new_key = f'model.visual.transformer.resblocks.{layer_idx}.attn.in_proj_weight' #concat qkv into 3072*1024 tensor
+            assert new_key in open_clip_state_dict_template
+            open_clip_state_dict_template[new_key] = in_proj_weight
+        else:
+            print(f"Missing q, k, or v for layer {layer_idx}. q: {qkv['q']}, k: {qkv['k']}, v: {qkv['v']}")
+        
+    return open_clip_state_dict_template
+
 def main(args):
     
     # Config
@@ -100,10 +141,6 @@ def main(args):
     finetuned_model_each_task = {}
     for task in args.tasks:
         finetuned_model_each_task[f'{task}'] = torch.load(f'/data2/david3684/2024_arithmetic/checkpoints/ViT-L-14/{task}/finetuned.pt')
-         
-    zero_shot_encoder_org = torch.load(zero_shot_checkpoint)
-    # eval_single_dataset(zero_shot_encoder, 'DTD', args) 
-    # check done. no error in zeroshot_encoder
             
     if os.path.exists(formatted_shared_weight_path):
         print("Loading formatted shared weight from path")
@@ -111,62 +148,14 @@ def main(args):
     else:
         print("No formatted shared weight found. Formatting shared weight into Openclip format")
         zero_shot_encoder = torch.load(zero_shot_checkpoint)
-        shared_weight_state_dict_formatted = zero_shot_encoder.state_dict()
-        
-        qkv_store = {}
-        
-        for old_key, value in shared_weight_state_dict.items():
-            if 'diff' in old_key or 'scale_dict' in old_key:
-                continue
-            
-            new_key = transform_key(old_key)
-            layer_idx = new_key.split('.')[4]
-            
-            if layer_idx not in qkv_store:
-                qkv_store[layer_idx] = {'q': None, 'k': None, 'v': None}
-            
-            weight_type = new_key.split('.')[-1] 
-            if weight_type in ['q_weight', 'k_weight', 'v_weight']: # in_proj.weight (q, k, v)
-                if args.scale_shared_weight:
-                    scale_key = f'shared.attn.layer.{layer_idx}.{weight_type[0]}'
-                    if scale_key in shared_weight_state_dict['scale_dict']:
-                        weight_scale_factor = shared_weight_state_dict['scale_dict'][scale_key]
-                        scaled_value = value / weight_scale_factor
-                        qkv_store[layer_idx][weight_type[0]] = scaled_value
-                    else:
-                        print(f"Scale key {scale_key} not found in scale_dict.")
-                else:
-                    qkv_store[layer_idx][weight_type[0]] = value
-            else: # out_proj.weight, c_fc.weight, c_proj.weight
-                assert new_key in shared_weight_state_dict_formatted
-                weight_scale_factor = shared_weight_state_dict['scale_dict'][old_key]
-                shared_weight_state_dict_formatted[new_key] = value / weight_scale_factor
-
-        for layer_idx, qkv in qkv_store.items():
-            if all(v.bool().all().item() for v in qkv.values()):
-                in_proj_weight = torch.cat([qkv['q'], qkv['k'], qkv['v']], dim=0)
-                new_key = f'model.visual.transformer.resblocks.{layer_idx}.attn.in_proj_weight' #concat qkv into 3072*1024 tensor
-                assert new_key in shared_weight_state_dict_formatted
-                shared_weight_state_dict_formatted[new_key] = in_proj_weight
-            else:
-                print(f"Missing q, k, or v for layer {layer_idx}. q: {qkv['q']}, k: {qkv['k']}, v: {qkv['v']}")
-        
-
-        zero_shot_encoder.load_state_dict(shared_weight_state_dict_formatted)
-        
+        formatted_shared_weight_state_dict = format_shared_weight(zero_shot_encoder.state_dict())
+        zero_shot_encoder.load_state_dict(formatted_shared_weight_state_dict)
         torch.save(zero_shot_encoder, f"/data2/david3684/2024_arithmetic/checkpoints/ViT-L-14/DTD_SUN_shared_weight_openclip.pt")
 
-    # weight_differences = calculate_weight_difference(zero_shot_encoder_org.state_dict(), shared_weight_state_dict_formatted)
-    # for key, diff in weight_differences.items():
-    #     print(f"Difference in {key}: {diff}")
-
-    # zero_shot_encoder_org = zero_shot_encoder_org.to(args.device)
     zero_shot_encoder = zero_shot_encoder.to(args.device)
     
     scale_factors_1, scale_factors_2 = save_scale_factors(shared_weight_state_dict['scale_dict'])
     args.task_scale_factors = {'DTD': scale_factors_1, 'SUN397': scale_factors_2}
-    # eval_single_dataset(zero_shot_encoder_org, 'DTD', args)
-    # eval_single_dataset(zero_shot_encoder, 'DTD', args)
     
     
     # args.task_scale_factors = None
@@ -190,13 +179,11 @@ def main(args):
     zero_shot_encoder.to(args.device)
     
     
-    # eval_single_dataset(single_task_image_encoder, 'DTD', args)
-    
     task_vector_sum = sum(low_rank_vectors.values()).to(args.device)
 
 
     multitask_image_encoder = task_vector_sum.apply_to(zero_shot_encoder, scaling_coef=1)
-
+    eval_single_dataset(multitask_image_encoder, 'SUN397', args)
     
     for task in args.tasks:
         eval_single_dataset(multitask_image_encoder, task, args)

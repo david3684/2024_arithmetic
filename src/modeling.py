@@ -38,7 +38,7 @@ class ImageEncoder(torch.nn.Module):
         # Apply scaling factors to weights
         #### Fix ####
         if args.task_scale_factors is not None:
-            print('Forward pass with scaling factors')
+            # print('Forward pass with scaling factors')
             with torch.no_grad():
                 for name, param in self.model.named_parameters():
                     if 'weight' in name:
