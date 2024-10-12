@@ -4,7 +4,7 @@ def make_task_vector_for_weight(args, finetuned_single_weight, pretrained_single
     """Create a task vector for a single weight tensor."""
     if args.low_rank_mode == 'SoRA':
         if 'in_proj' in key:
-            print(f"Shape of finetuned_single_weight: {finetuned_single_weight.shape}") 
+            # print(f"Shape of finetuned_single_weight: {finetuned_single_weight.shape}") 
             q_1, k_1, v_1 = finetuned_single_weight.chunk(3, dim=0)
             q_2, k_2, v_2 = pretrained_single_weight.chunk(3, dim=0)
             q_diff = q_1/torch.norm(q_1, p='fro') - q_2
@@ -25,7 +25,7 @@ def make_task_vector_for_weight(args, finetuned_single_weight, pretrained_single
         return parsed_U @ parsed_V_T
     else:
         if 'in_proj' in key:
-            print(f"Shape of finetuned_single_weight: {finetuned_single_weight.shape}") 
+            # print(f"Shape of finetuned_single_weight: {finetuned_single_weight.shape}") 
             q_1, k_1, v_1 = finetuned_single_weight.chunk(3, dim=0)
             q_2, k_2, v_2 = pretrained_single_weight.chunk(3, dim=0)
             q_diff = q_1/torch.norm(q_1, p='fro') - q_2

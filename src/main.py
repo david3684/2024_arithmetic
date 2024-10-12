@@ -137,7 +137,7 @@ def main(args):
     shared_weight_state_dict = torch.load(args.shared_weight)
     zero_shot_checkpoint = f'checkpoints/{args.model}/zeroshot.pt'
     
-    formatted_shared_weight_path = f"/data2/david3684/2024_arithmetic/checkpoints/ViT-L-14/DTD_SUN_shared_weight_openclip.pt"
+    formatted_shared_weight_path = f"/data2/david3684/2024_arithmetic/checkpoints/ViT-L-14/DTD_SUN397_shared_weight_openclip.pt"
     finetuned_model_each_task = {}
     for task in args.tasks:
         finetuned_model_each_task[f'{task}'] = torch.load(f'/data2/david3684/2024_arithmetic/checkpoints/ViT-L-14/{task}/finetuned.pt')
@@ -148,9 +148,9 @@ def main(args):
     else:
         print("No formatted shared weight found. Formatting shared weight into Openclip format")
         zero_shot_encoder = torch.load(zero_shot_checkpoint)
-        formatted_shared_weight_state_dict = format_shared_weight(zero_shot_encoder.state_dict())
+        formatted_shared_weight_state_dict = format_shared_weight(shared_weight_state_dict, zero_shot_encoder.state_dict())
         zero_shot_encoder.load_state_dict(formatted_shared_weight_state_dict)
-        torch.save(zero_shot_encoder, f"/data2/david3684/2024_arithmetic/checkpoints/ViT-L-14/DTD_SUN_shared_weight_openclip.pt")
+        torch.save(zero_shot_encoder, f"/data2/david3684/2024_arithmetic/checkpoints/ViT-L-14/DTD_SUN397_shared_weight_openclip.pt")
 
     zero_shot_encoder = zero_shot_encoder.to(args.device)
     
@@ -162,11 +162,11 @@ def main(args):
     # eval_single_dataset(finetuned_model_each_task['DTD'], 'DTD', args)
     
     low_rank_vectors = {}
-    for initial_rank_ratio in [0, 0.001, 0.005, 0.01, 0.02, 0.05, 0.16, 0.32]:
+    for initial_rank_ratio in [0.5, 0.32, 0.16, 0.08]:
         for task in args.tasks:
             finetuned_model_each_task[f'{task}'].to(args.device) 
             args.initial_rank_ratio = initial_rank_ratio       
-            task_vector_path = f"/data2/david3684/2024_arithmetic/checkpoints/ViT-L-14/{task}/vector_from_shared_{args.low_rank_mode}_rank{args.initial_rank_ratio}.pt"
+            task_vector_path = f"/data2/david3684/2024_arithmetic/checkpoints/ViT-L-14/{task}/{task}_vector_from_shared_{args.low_rank_mode}_rank{args.initial_rank_ratio}.pt"
             if os.path.exists(task_vector_path):
                 low_rank_vectors[f'{task}'] = torch.load(task_vector_path)
             else:
@@ -183,7 +183,7 @@ def main(args):
 
 
     multitask_image_encoder = task_vector_sum.apply_to(zero_shot_encoder, scaling_coef=1)
-    eval_single_dataset(multitask_image_encoder, 'SUN397', args)
+    # eval_single_dataset(multitask_image_encoder, 'DTD', args)
     
     for task in args.tasks:
         eval_single_dataset(multitask_image_encoder, task, args)
