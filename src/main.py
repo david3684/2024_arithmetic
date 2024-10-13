@@ -162,7 +162,7 @@ def main(args):
     # eval_single_dataset(finetuned_model_each_task['DTD'], 'DTD', args)
     
     low_rank_vectors = {}
-    for initial_rank_ratio in [0.5, 0.32, 0.16, 0.08]:
+    for initial_rank_ratio in [0.05, 0.02, 0.01, 0.005, 0.001, 0]:
         for task in args.tasks:
             finetuned_model_each_task[f'{task}'].to(args.device) 
             args.initial_rank_ratio = initial_rank_ratio       
@@ -174,19 +174,19 @@ def main(args):
                 low_rank_vectors[f'{task}'] = TaskVector(args, zero_shot_encoder.state_dict(), finetuned_model_each_task[f'{task}'].state_dict(), task=task, vector=None)
                 torch.save(low_rank_vectors[f'{task}'], task_vector_path)
     
-    low_rank_vectors['DTD'].to(args.device)
-    low_rank_vectors['SUN397'].to(args.device)
-    zero_shot_encoder.to(args.device)
+    # low_rank_vectors['DTD'].to(args.device)
+    # low_rank_vectors['SUN397'].to(args.device)
+    # zero_shot_encoder.to(args.device)
     
     
-    task_vector_sum = sum(low_rank_vectors.values()).to(args.device)
+    # task_vector_sum = sum(low_rank_vectors.values()).to(args.device)
 
 
-    multitask_image_encoder = task_vector_sum.apply_to(zero_shot_encoder, scaling_coef=1)
-    # eval_single_dataset(multitask_image_encoder, 'DTD', args)
+    # multitask_image_encoder = task_vector_sum.apply_to(zero_shot_encoder, scaling_coef=1)
+    # # eval_single_dataset(multitask_image_encoder, 'DTD', args)
     
-    for task in args.tasks:
-        eval_single_dataset(multitask_image_encoder, task, args)
+    # for task in args.tasks:
+    #     eval_single_dataset(multitask_image_encoder, task, args)
     
     
 if __name__ == "__main__":

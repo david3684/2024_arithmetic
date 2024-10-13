@@ -13,6 +13,51 @@ from src.modeling import ImageClassifier
 from src.datasets.registry import get_dataset
 
 
+def eval_single_dataset_with_prediction(image_encoder, dataset_name, args):
+    classification_head = get_classification_head(args, dataset_name)
+    model = ImageClassifier(image_encoder, classification_head)
+    # 이 근방에서 scaling 처리 해줘야함.
+    model.eval()
+
+    dataset = get_dataset(
+        dataset_name,
+        model.val_preprocess,
+        location=args.data_location,
+        batch_size=args.batch_size
+    )
+    dataloader = get_dataloader(
+        dataset, is_train=False, args=args, image_encoder=None)
+    device = args.device
+
+    with torch.no_grad():
+        top1, correct, n = 0., 0., 0.
+        for i, data in enumerate(tqdm.tqdm(dataloader)):
+            data = maybe_dictionarize(data)
+            x = data['images'].to(device)
+            y = data['labels'].to(device)
+
+            logits = utils.get_logits(x, model, dataset_name, args)
+
+            pred = logits.argmax(dim=1, keepdim=True).to(device)
+        
+            if i == 0:
+                all_preds = pred
+                all_labels = y
+            else:
+                all_preds = torch.cat((all_preds, pred), dim=0)
+                all_labels = torch.cat((all_labels, y), dim=0)
+            correct += pred.eq(y.view_as(pred)).sum().item()
+            
+            n += y.size(0)
+
+        top1 = correct / n
+
+    metrics = {'top1': top1}
+    print(f'Done evaluating on {dataset_name}. Accuracy: {100*top1:.2f}%')
+    
+    return metrics, all_preds, all_labels
+
+
 def eval_single_dataset(image_encoder, dataset_name, args):
     classification_head = get_classification_head(args, dataset_name)
     model = ImageClassifier(image_encoder, classification_head)

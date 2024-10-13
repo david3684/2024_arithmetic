@@ -111,6 +111,14 @@ class TaskVector():
             for key in self.vector:
                 new_vector[key] = - self.vector[key]
         return TaskVector(vector=new_vector)
+    
+    def multiply(self, scalar):
+        """Multiply a task vector by a scalar."""
+        with torch.no_grad():
+            new_vector = {}
+            for key in self.vector:
+                new_vector[key] = scalar * self.vector[key]
+        return TaskVector(vector=new_vector)
 
     def apply_to(self, pretrained_checkpoint, scaling_coef=1.0):
         """Apply a task vector to a pretrained model."""
