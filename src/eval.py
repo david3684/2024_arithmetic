@@ -13,20 +13,12 @@ from src.modeling import ImageClassifier
 from src.datasets.registry import get_dataset
 
 
-def eval_single_dataset_with_prediction(image_encoder, dataset_name, args):
+def eval_single_dataset_with_prediction(image_encoder, dataset_name, dataloader, args):
     classification_head = get_classification_head(args, dataset_name)
     model = ImageClassifier(image_encoder, classification_head)
     # 이 근방에서 scaling 처리 해줘야함.
     model.eval()
 
-    dataset = get_dataset(
-        dataset_name,
-        model.val_preprocess,
-        location=args.data_location,
-        batch_size=args.batch_size
-    )
-    dataloader = get_dataloader(
-        dataset, is_train=False, args=args, image_encoder=None)
     device = args.device
 
     with torch.no_grad():
