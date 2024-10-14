@@ -2,6 +2,9 @@ checkpoints/
 out/
 *.log
 *.pkl
+*.npy
+
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

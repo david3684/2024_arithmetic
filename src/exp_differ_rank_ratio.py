@@ -66,7 +66,8 @@ logger.info("Saving scale factors")
 scale_factor_1, scale_factor_2 = save_scale_factors(shared_weight_model['scale_dict'])
 args.task_scale_factors = {args.tasks[0]: scale_factor_1, args.tasks[1]: scale_factor_2}
 rank_minimization_mode = 'SoRA'
-initial_rank_ratios = [0.5, 0.32, 0.16, 0.08, 0.05, 0.02, 0.01, 0.005, 0.001, 0]
+# initial_rank_ratios = [0.5, 0.32, 0.16, 0.08, 0.05, 0.02, 0.01, 0.005, 0.001, 0]
+initial_rank_ratios = [1]
 
 # logger.info("Evaluating shared weight")
 # eval_single_dataset(zero_shot_encoder, args.tasks[0], args)

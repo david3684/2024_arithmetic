@@ -162,7 +162,7 @@ def main(args):
     # eval_single_dataset(finetuned_model_each_task['DTD'], 'DTD', args)
     
     low_rank_vectors = {}
-    for initial_rank_ratio in [0.05, 0.02, 0.01, 0.005, 0.001, 0]:
+    for initial_rank_ratio in [1]:
         for task in args.tasks:
             finetuned_model_each_task[f'{task}'].to(args.device) 
             args.initial_rank_ratio = initial_rank_ratio       

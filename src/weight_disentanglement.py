@@ -1,5 +1,4 @@
 import torch
-import logging
 import sys
 import numpy as np
 from src.eval import eval_single_dataset_with_prediction, eval_single_dataset
@@ -12,14 +11,30 @@ from datetime import datetime
 import pickle
 import os
 
-current_time = datetime.now().strftime('%Y%m%d_%H%M%S')
-log_file = f'/data2/david3684/logs/disentanglement_{current_time}.log'
+def error_rate(y_true, y_pred):
+    error = 0
+    count = 0
+    for i in range(len(y_true)):
+        if y_true[i] != y_pred[i]:
+            error += 1
+        count += 1
+    return error / count
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s', handlers=[
-    logging.FileHandler(log_file),
-    logging.StreamHandler()
-])
-logger = logging.getLogger(__name__)
+# 현재 시간으로 로그 파일 이름 생성
+current_time = datetime.now().strftime('%Y%m%d_%H%M%S')
+log_file = f'/data2/david3684/2024_arithmetic/logs/disentanglement_{current_time}.log'
+log_dir = os.path.dirname(log_file)
+
+# 디렉토리가 존재하지 않으면 생성
+if not os.path.exists(log_dir):
+    os.makedirs(log_dir)
+
+# 로그 파일 열기
+log_f = open(log_file, 'w')
+
+def log(message):
+    print(message)
+    log_f.write(message + '\n')
 
 args = parse_arguments()
 args.model = 'ViT-L-14'
@@ -53,9 +68,8 @@ disentanglement_errors = np.zeros((n, n))
 predicts_0_file = "predicts_0.pkl"
 predicts_1_file = "predicts_1.pkl"
 
-# predicts_0와 predicts_1을 파일에서 로드하거나 생성
 if os.path.exists(predicts_0_file) and os.path.exists(predicts_1_file):
-    logger.info("Loading predictions from files")
+
     with open(predicts_0_file, 'rb') as f:
         predicts_0 = pickle.load(f)
     with open(predicts_1_file, 'rb') as f:
@@ -63,13 +77,13 @@ if os.path.exists(predicts_0_file) and os.path.exists(predicts_1_file):
 else:       
     predicts_0 = {}
     for alpha_1 in tqdm(alpha_range):
-        logger.info(f"Saving predictions for alpha: {alpha_1}")
+        log(f"Saving predictions for alpha: {alpha_1}")
         single_task_image_encoder_1 = task_vectors[args.tasks[0]].apply_to(deepcopy(zero_shot_encoder), scaling_coef=alpha_1).to(args.device)
         predicts_0[alpha_1] = eval_single_dataset_with_prediction(single_task_image_encoder_1, args.tasks[0], args)[1]
 
     predicts_1 = {}
     for alpha_2 in tqdm(alpha_range):
-        logger.info(f"Saving predictions for alpha: {alpha_2}")
+        log(f"Saving predictions for alpha: {alpha_2}")
         single_task_image_encoder_2 = task_vectors[args.tasks[1]].apply_to(deepcopy(zero_shot_encoder), scaling_coef=alpha_2).to(args.device)
         predicts_1[alpha_2] = eval_single_dataset_with_prediction(single_task_image_encoder_2, args.tasks[1], args)[1]
 
@@ -78,10 +92,11 @@ else:
     with open(predicts_1_file, 'wb') as f:
         pickle.dump(predicts_1, f)
 
-logger.info("Calculating disentanglement errors")
+        
+log("Calculating disentanglement errors")
 for i, alpha_1 in enumerate(tqdm(alpha_range)):
     for j, alpha_2 in enumerate(alpha_range):
-        logger.info(f"Calculating disentanglement error for alpha_1: {alpha_1}, alpha_2: {alpha_2}")
+        log(f"Calculating disentanglement error for alpha_1: {alpha_1}, alpha_2: {alpha_2}")
         task_vector_sum = task_vectors[args.tasks[0]].multiply(alpha_1) + task_vectors[args.tasks[1]].multiply(alpha_2)
         zero_shot_encoder_copy = deepcopy(zero_shot_encoder)
         multitask_image_encoder = task_vector_sum.apply_to(zero_shot_encoder_copy, scaling_coef=1).to(args.device)
@@ -92,16 +107,19 @@ for i, alpha_1 in enumerate(tqdm(alpha_range)):
             _, multitask_pred, multitask_label = eval_single_dataset_with_prediction(multitask_image_encoder, task, args)
             if task == args.tasks[0]:
                 total_count += len(multitask_pred) 
-                if not np.array_equal(multitask_pred, predicts_0[alpha_1]):
-                    error += 1
+                for k in range(len(multitask_pred)):
+                    if multitask_pred[i] != predicts_0[alpha_1][i]:
+                        error += 1
+                log(f"Error for task {task} at alpha_1: {alpha_1}: {error}")
             elif task == args.tasks[1]:
                 total_count += len(multitask_pred)
-                if not np.array_equal(multitask_pred, predicts_1[alpha_2]):
-                    error += 1
+                for k in range(len(multitask_pred)):
+                    if multitask_pred[i] != predicts_1[alpha_2][i]:
+                        error += 1
+                log(f"Error for task {task} at alpha_2: {alpha_2}: {error}")
         
         disentanglement_errors[i, j] = error/total_count
-        logger.info(f"Disentanglement error for alpha_1: {alpha_1}, alpha_2: {alpha_2}: {disentanglement_errors[i, j]}")
-
-logger.info("Saving disentanglement errors")
-np.save("disentanglement_errors.npy", disentanglement_errors)
-logger.info("Plotting disentanglement errors")
+        log(f"Disentanglement error for alpha_1: {alpha_1}, alpha_2: {alpha_2}: {disentanglement_errors[i, j]}")
+rank = 0.5
+np.save(f"disentanglement_errors_{rank}.npy", disentanglement_errors)
+log_f.close()
