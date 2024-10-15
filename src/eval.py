@@ -13,9 +13,9 @@ from src.modeling import ImageClassifier
 from src.datasets.registry import get_dataset
 
 
-def eval_single_dataset_with_prediction(image_encoder, dataset_name, dataloader, args):
-    classification_head = get_classification_head(args, dataset_name)
-    model = ImageClassifier(image_encoder, classification_head)
+def eval_single_dataset_with_prediction(image_encoder, head, dataset_name, dataloader, args):
+    # classification_head = get_classification_head(args, dataset_name)
+    model = ImageClassifier(image_encoder, head)
     # 이 근방에서 scaling 처리 해줘야함.
     model.eval()
 
