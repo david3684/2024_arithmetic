@@ -99,13 +99,32 @@ def parse_arguments():
         help='Directory for caching models from OpenCLIP'
     )
     parser.add_argument(
-        "--scale_model",
+        "--no_shared_weights",
         type=bool,
         default=False,
-        help="Whether to scale the model."
+        help="Wheter use shared weight building task vector"
+    )
+    parser.add_argument(
+        "--initial_rank_ratio",
+        type=float,
+        default=1.0,
+        help="The rank ratio to start with."
+    )
+    parser.add_argument(
+        "--tasks",
+        type=lambda x: x.split(","),
+        default=None,
+        help="The tasks to train on."
+    )
+    parser.add_argument(
+        "--low_rank_mode",
+        type=str,
+        default='SoRA',
+        help="The tasks to train on."
     )
     parsed_args = parser.parse_args()
     parsed_args.device = "cuda" if torch.cuda.is_available() else "cpu"
+    
     
     if parsed_args.load is not None and len(parsed_args.load) == 1:
         parsed_args.load = parsed_args.load[0]

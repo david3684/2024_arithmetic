@@ -75,7 +75,14 @@ class TaskVector():
                 
                 pretrained_state_dict = pretrained_checkpoint
                 finetuned_state_dict = finetuned_checkpoint
-                self.vector = make_task_vector(args, finetuned_state_dict, pretrained_state_dict, task)
+                if args.no_shared_weight:
+                    self.vector = {}
+                    for key in pretrained_state_dict:
+                        if pretrained_state_dict[key].dtype in [torch.int64, torch.uint8]:
+                            continue
+                        self.vector[key] = finetuned_state_dict[key] - pretrained_state_dict[key]
+                else:
+                    self.vector = make_task_vector(args, finetuned_state_dict, pretrained_state_dict, task)
 
     def to(self, device):
         for key in self.vector:

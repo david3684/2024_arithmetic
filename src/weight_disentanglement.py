@@ -23,16 +23,16 @@ def error_rate(y_true, y_pred):
         count += 1
     return error / count
 
-# 현재 시간으로 로그 파일 이름 생성
+
 current_time = datetime.now().strftime('%Y%m%d_%H%M%S')
 log_file = f'/data2/david3684/2024_arithmetic/logs/disentanglement_{current_time}.log'
 log_dir = os.path.dirname(log_file)
 
-# 디렉토리가 존재하지 않으면 생성
+
 if not os.path.exists(log_dir):
     os.makedirs(log_dir)
 
-# 로그 파일 열기
+
 log_f = open(log_file, 'w')
 
 def log(message):
@@ -48,7 +48,7 @@ args.initial_rank_ratio = 0.5
 args.task_scale_factors = None
 args.save = 'checkpoints/ViT-L-14'
 args.data_location = '/data2/david3684/data'
-args.n_eval_points = 10
+args.n_eval_points = 21
 args.num_test_samples = 2048
 
 shared_weight_model = torch.load('/data2/david3684/2024_arithmetic/shared_weight/20241010_vanilla/rankmin_config_20241010_uni_vanilla_2.bin') 
@@ -64,13 +64,13 @@ for task in args.tasks:
     task_vector_path = f"/data2/david3684/2024_arithmetic/checkpoints/ViT-L-14/{task}/{task}_vector_from_shared_{args.low_rank_mode}_rank{args.initial_rank_ratio}.pt"
     task_vectors[task] = torch.load(task_vector_path).to(args.device)
 
-n=11
+n=args.n_eval_points
 alpha_range = np.linspace(-2, 2, n)
 
 disentanglement_errors = np.zeros((n, n))
 
-predicts_0_file = "predicts_0.pkl"
-predicts_1_file = "predicts_1.pkl"
+predicts_0_file = "predicts_0_21.pkl"
+predicts_1_file = "predicts_1_21.pkl"
 
 _, _, val_preprocess = open_clip.create_model_and_transforms(
             args.model, pretrained='openai', cache_dir=args.openclip_cachedir)
@@ -80,7 +80,8 @@ dataset_1 = get_dataset(
         val_preprocess,
         location=args.data_location,
         batch_size=args.batch_size,
-        num_test_samples=args.num_test_samples,
+        num_workers=16,
+        num_test_samples=None,
     )
 dataloader_1 = get_dataloader(
     dataset_1, is_train=False, args=args, image_encoder=None)
@@ -90,6 +91,7 @@ dataset_2 = get_dataset(
         val_preprocess,
         location=args.data_location,
         batch_size=args.batch_size,
+        num_workers=16,
         num_test_samples=args.num_test_samples,
     )
 dataloader_2 = get_dataloader(
@@ -104,23 +106,25 @@ if os.path.exists(predicts_0_file) and os.path.exists(predicts_1_file):
         predicts_1 = pickle.load(f)
 else:       
     predicts_0 = {}
-    for alpha_0 in tqdm(alpha_range):
+    for i, alpha_0 in enumerate(tqdm(alpha_range)):
         log(f"Saving predictions for alpha: {alpha_0}")
         single_task_image_encoder_1 = task_vectors[args.tasks[0]].apply_to(deepcopy(zero_shot_encoder), scaling_coef=alpha_0).to(args.device)
-        predicts_0[alpha_0] = eval_single_dataset_with_prediction(single_task_image_encoder_1, args.tasks[0], dataloader_1, args)[1]
+        _, predicts_0[i], labels = eval_single_dataset_with_prediction(single_task_image_encoder_1, args.tasks[0], dataloader_1, args)
+
+        
 
     predicts_1 = {}
-    for alpha_1 in tqdm(alpha_range):
+    for i, alpha_1 in enumerate(tqdm(alpha_range)):
         log(f"Saving predictions for alpha: {alpha_1}")
         single_task_image_encoder_2 = task_vectors[args.tasks[1]].apply_to(deepcopy(zero_shot_encoder), scaling_coef=alpha_1).to(args.device)
-        predicts_1[alpha_1] = eval_single_dataset_with_prediction(single_task_image_encoder_2, args.tasks[1], dataloader_2, args)[1]
+        _, predicts_1[i], labels = eval_single_dataset_with_prediction(single_task_image_encoder_2, args.tasks[1], dataloader_2, args)
+
 
     with open(predicts_0_file, 'wb') as f:
         pickle.dump(predicts_0, f)
     with open(predicts_1_file, 'wb') as f:
         pickle.dump(predicts_1, f)
 
-        
 log("Calculating disentanglement errors")
 for i, alpha_0 in enumerate(tqdm(alpha_range)):
     for j, alpha_1 in enumerate(alpha_range):
@@ -133,18 +137,19 @@ for i, alpha_0 in enumerate(tqdm(alpha_range)):
         total_count=0
         for task in args.tasks:
             dataloader = dataloader_1 if task == args.tasks[0] else dataloader_2
-            _, multitask_pred, multitask_label = eval_single_dataset_with_prediction(multitask_image_encoder, task, dataloader, args)
+            _, multitask_pred, multitask_labels = eval_single_dataset_with_prediction(multitask_image_encoder, task, dataloader, args)
             if task == args.tasks[0]:
+                print(multitask_labels)
                 total_count += len(multitask_pred) 
-                print(len(multitask_pred))
                 for k in range(len(multitask_pred)):
-                    if multitask_pred[k] != predicts_0[alpha_0][k]:
+                    if multitask_pred[k] != predicts_0[i][k]:
                         error += 1
                 log(f"Error for task {task} at alpha_0: {alpha_0}: {error}")
             elif task == args.tasks[1]:
+                print(multitask_labels)
                 total_count += len(multitask_pred)
                 for k in range(len(multitask_pred)):
-                    if multitask_pred[k] != predicts_1[alpha_1][k]:
+                    if multitask_pred[k] != predicts_1[j][k]:
                         error += 1
                 log(f"Error for task {task} at alpha_1: {alpha_1}: {error}")
         
