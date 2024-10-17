@@ -3,6 +3,7 @@ import argparse
 
 import torch
 
+
 def parse_arguments():
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -95,7 +96,7 @@ def parse_arguments():
     parser.add_argument(
         "--openclip-cachedir",
         type=str,
-        default='~/.cache/open_clip',
+        default='/data2/david3684/.cache/open_clip',
         help='Directory for caching models from OpenCLIP'
     )
     parser.add_argument(
@@ -122,10 +123,9 @@ def parse_arguments():
         default='SoRA',
         help="The tasks to train on."
     )
-    parsed_args = parser.parse_args()
+    parsed_args, unknown = parser.parse_known_args()
     parsed_args.device = "cuda" if torch.cuda.is_available() else "cpu"
-    
-    
+
     if parsed_args.load is not None and len(parsed_args.load) == 1:
         parsed_args.load = parsed_args.load[0]
     return parsed_args

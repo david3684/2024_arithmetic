@@ -14,28 +14,27 @@ class ImageEncoder(torch.nn.Module):
             name, pretrained = args.model.split('__pretrained__')
         else:
             name = args.model
-            pretrained = 'openai'
+            pretrained = args.pretrained_model
         self.model, self.train_preprocess, self.val_preprocess = open_clip.create_model_and_transforms(
             name, pretrained=pretrained, cache_dir=args.openclip_cachedir)
-        
+
         self.cache_dir = args.cache_dir
 
         if not keep_lang and hasattr(self.model, 'transformer'):
             delattr(self.model, 'transformer')
-                
+
     def forward(self, images, task=None, args=None):
         assert self.model is not None
-        
         # Apply scaling factors to weights
-        #### Fix ####
-        if args.task_scale_factors is not None:
-            # print('Forward pass with scaling factors')
+        if args is not None and task is not None and args.task_scale_factors is not None:
+            print('Forward pass with scaling factors')
             with torch.no_grad():
                 for name, param in self.model.named_parameters():
                     if 'weight' in name:
-                        scale_name = 'model.'+name + '.scale' # load task specific scaling factor
+                        scale_name = 'model.'+name + '.scale'  # load task specific scaling factor
                         if scale_name in args.task_scale_factors[task].keys():
-                            # import ipdb; ipdb.set_trace()
+                            # import ipdb
+                            # ipdb.set_trace()
                             scaling_factor = args.task_scale_factors[task][scale_name]
                             if 'attn.in_proj' in name:
                                 q, k, v = param.data.chunk(3, dim=0)
@@ -44,13 +43,13 @@ class ImageEncoder(torch.nn.Module):
                                 v *= scaling_factor[2]
                                 param.data = torch.cat([q, k, v], dim=0)
                             else:
-                                param.data *= scaling_factor                        
+                                param.data *= scaling_factor
             encoded_images = self.model.encode_image(images)
-        
+
             with torch.no_grad():
                 for name, param in self.model.named_parameters():
                     if 'weight' in name:
-                        scale_name = 'model.'+name + '.scale' # load task specific scaling factor
+                        scale_name = 'model.'+name + '.scale'  # load task specific scaling factor
                         if scale_name in args.task_scale_factors[task].keys():
                             scaling_factor = args.task_scale_factors[task][scale_name]
                             if 'attn.in_proj' in name:
@@ -63,9 +62,9 @@ class ImageEncoder(torch.nn.Module):
                                 param.data /= scaling_factor
         else:
             encoded_images = self.model.encode_image(images)
-        
+
         return encoded_images
-    
+
     def __call__(self, inputs, dataset, args):
         return self.forward(inputs, dataset, args)
 
@@ -84,8 +83,6 @@ class ImageEncoder(torch.nn.Module):
         self.model, self.train_preprocess, self.val_preprocess = open_clip.create_model_and_transforms(
             name, pretrained=pretrained, cache_dir=args.openclip_cachedir)
         self.model.load_from_state_dict(state_dict)
-        
-
 
 
 class ClassificationHead(torch.nn.Linear):
@@ -136,7 +133,7 @@ class ImageClassifier(torch.nn.Module):
         outputs = self.classification_head(features)
         return outputs
 
-    def __call__(self, inputs, dataset, args):
+    def __call__(self, inputs, dataset=None, args=None):
         return self.forward(inputs, dataset, args)
 
     def save(self, filename):

@@ -72,8 +72,8 @@ averaged_model = create_model_with_averaged_weights(args, finetuned_state_dict_0
 for task in args.tasks:
     eval_single_dataset(averaged_model, task, args)
 
-task_vector_0 = TaskVector(args, finetuned_state_dict_0, averaged_model.state_dict())
-task_vector_1 = TaskVector(args, finetuned_state_dict_1, averaged_model.state_dict())
+task_vector_0 = TaskVector(args, averaged_model.state_dict(), finetuned_state_dict_0)
+task_vector_1 = TaskVector(args, averaged_model.state_dict(), finetuned_state_dict_1)
 
 task_vector_sum = (task_vector_0+task_vector_1)
 multitask_image_encoder = task_vector_sum.apply_to(averaged_model, scaling_coef=1.0).to(args.device)

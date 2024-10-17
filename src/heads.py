@@ -52,7 +52,7 @@ def build_classification_head(model, dataset_name, template, data_location, devi
 
 
 def get_classification_head(args, dataset):
-    filename = os.path.join(args.save, f'head_{dataset}.pt')
+    filename = os.path.join(args.save, f'head_{dataset}_{args.pretrained_model}.pt')
     if os.path.exists(filename):
         print(f'Classification head for {args.model} on {dataset} exists at {filename}')
         return ClassificationHead.load(filename)

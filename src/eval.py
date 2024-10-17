@@ -13,9 +13,11 @@ from src.modeling import ImageClassifier
 from src.datasets.registry import get_dataset
 
 
-def eval_single_dataset_with_prediction(image_encoder, head, dataset_name, dataloader, args):
-    # classification_head = get_classification_head(args, dataset_name)
-    model = ImageClassifier(image_encoder, head)
+def eval_single_dataset_with_prediction(image_encoder, dataset_name, dataloader, args, head=None,):
+    if head == None:
+        classification_head = get_classification_head(args, dataset_name)
+
+    model = ImageClassifier(image_encoder, classification_head)
     # 이 근방에서 scaling 처리 해줘야함.
     model.eval()
 
@@ -31,7 +33,7 @@ def eval_single_dataset_with_prediction(image_encoder, head, dataset_name, datal
             logits = utils.get_logits(x, model, dataset_name, args)
 
             pred = logits.argmax(dim=1, keepdim=True).to(device)
-        
+
             if i == 0:
                 all_preds = pred
                 all_labels = y
@@ -39,14 +41,14 @@ def eval_single_dataset_with_prediction(image_encoder, head, dataset_name, datal
                 all_preds = torch.cat((all_preds, pred), dim=0)
                 all_labels = torch.cat((all_labels, y), dim=0)
             correct += pred.eq(y.view_as(pred)).sum().item()
-            
+
             n += y.size(0)
 
         top1 = correct / n
 
     metrics = {'top1': top1}
     print(f'Done evaluating on {dataset_name}. Accuracy: {100*top1:.2f}%')
-    
+
     return metrics, all_preds, all_labels
 
 
@@ -78,15 +80,16 @@ def eval_single_dataset(image_encoder, dataset_name, args):
             pred = logits.argmax(dim=1, keepdim=True).to(device)
 
             correct += pred.eq(y.view_as(pred)).sum().item()
-            
+
             n += y.size(0)
 
         top1 = correct / n
 
     metrics = {'top1': top1}
     print(f'Done evaluating on {dataset_name}. Accuracy: {100*top1:.2f}%')
-    
+
     return metrics
+
 
 def evaluate(image_encoder, args):
     if args.eval_datasets is None:
