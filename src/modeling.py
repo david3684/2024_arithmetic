@@ -27,14 +27,12 @@ class ImageEncoder(torch.nn.Module):
         assert self.model is not None
         # Apply scaling factors to weights
         if args is not None and task is not None and args.task_scale_factors is not None:
-            print('Forward pass with scaling factors')
+            # print('Forward pass with scaling factors')
             with torch.no_grad():
                 for name, param in self.model.named_parameters():
                     if 'weight' in name:
                         scale_name = 'model.'+name + '.scale'  # load task specific scaling factor
                         if scale_name in args.task_scale_factors[task].keys():
-                            # import ipdb
-                            # ipdb.set_trace()
                             scaling_factor = args.task_scale_factors[task][scale_name]
                             if 'attn.in_proj' in name:
                                 q, k, v = param.data.chunk(3, dim=0)

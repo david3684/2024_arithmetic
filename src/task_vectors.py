@@ -1,12 +1,6 @@
 import torch
 
 
-def make_task_vector_from_shared_weight(args, finetuned_state_dict_1, finetuned_stated_dict_2, shared_state_dict):
-    task_vector_1 = TaskVector(args, shared_state_dict, finetuned_state_dict_1)
-    task_vector_2 = TaskVector(args, shared_state_dict, finetuned_state_dict_1)
-    return task_vector_1, task_vector_2
-
-
 def make_task_vector_for_weight(args, finetuned_single_weight, pretrained_single_weight, key):
     """Create a task vector for a single weight tensor."""
     if args.low_rank_mode == 'SoRA':
@@ -53,7 +47,8 @@ def make_task_vector(args, finetuned_state_dict, pretrained_state_dict, task):
     task_vector = {}
 
     for key, value in finetuned_state_dict.items():
-        print(f"Making task vector for {key}")
+        # print(f"Making task vector for {key}")
+        value.to(args.device)
         diff = finetuned_state_dict[key] - pretrained_state_dict[key]
         if key == 'model.logit_scale':
             task_vector[key] = diff  # zero out the logit scale
@@ -68,10 +63,6 @@ def make_task_vector(args, finetuned_state_dict, pretrained_state_dict, task):
         else:
             # positional embedding, class token, etc.
             task_vector[key] = diff
-
-    for key, value in pretrained_state_dict.items():
-        print(finetuned_state_dict[key]-(value+task_vector[key]
-              * torch.norm(task_vector[key], p='fro')))
     return task_vector
 
 
